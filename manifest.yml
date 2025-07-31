@@ -1,0 +1,11 @@
+---
+applications:
+  - name: bosh-reverse-proxy
+    memory: 128M
+    instances: 1
+    buildpacks: 
+    - go_buildpack
+    command: bosh-reverse-proxy -f map-config.json -secret BOSH_SECRET -host BOSH_IP
+    readiness-health-check-type: process
+    routes:
+    - route: custom.cfapps.domain
