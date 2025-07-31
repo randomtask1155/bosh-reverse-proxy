@@ -29,14 +29,14 @@ func LoadRouteMapsFromFile(f string) (RouteMapController, error) {
 		return rmc, err
 	}
 	err = json.Unmarshal(b, &rmc.Maps)
-	go rmc.RouterSyncer()
+	//go rmc.RouterSyncer()
 	return rmc, err
 }
 
 func LoadRouteMapsFromString(f string) (RouteMapController, error) {
 	rmc := RouteMapController{make([]RouteMaps, 0)}
 	err := json.Unmarshal([]byte(f), &rmc)
-	go rmc.RouterSyncer()
+	//go rmc.RouterSyncer()
 	return rmc, err
 }
 
@@ -75,11 +75,13 @@ func (rmc *RouteMapController) LoadBoshMappings(c, s, h string) error {
 		for _, deployment := range bi.Deployments {
 			if strings.HasPrefix(deployment.Name, m.DeploymentPrefix) || deployment.Name == m.Deployment {
 				rmc.Maps[i].Deployment = deployment.Name
-				rmc.Maps[i].HostList = make([]string, 0) // reset hostlist so it does not grow uncontrollably during resync
+				//rmc.Maps[i].HostList = make([]string, 0) // reset hostlist so it does not grow uncontrollably during resync
 				for _, instance := range deployment.Instances {
 					if instance.Job == m.Job {
-						logger.Debug("adding instance ip to route map", "deployment", deployment.Name, "instance", instance.Job, "ip_count", len(instance.IPs))
-						rmc.Maps[i].HostList = append(rmc.Maps[i].HostList, instance.IPs...)
+						if len(instance.IPs) > 0 {
+							logger.Debug("adding instance ip to route map", "deployment", deployment.Name, "instance", instance.Job, "ip_count", len(instance.IPs), "ip", instance.IPs[0])
+							rmc.Maps[i].HostList = append(rmc.Maps[i].HostList, instance.IPs...)
+						}
 					}
 				}
 			}
