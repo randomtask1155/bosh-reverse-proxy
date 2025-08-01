@@ -74,11 +74,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = RMaps.LoadBoshMappings(*boshClient, *boshSecret, *boshHost)
-	if err != nil {
-		logger.Error("failed to map bosh jobs", "error", err)
-		os.Exit(1)
-	}
+	go RMaps.RouterSyncer(*boshClient, *boshSecret, *boshHost)
 
 	logger.Info("starting http server")
 	proxy := &httputil.ReverseProxy{
@@ -89,9 +85,9 @@ func main() {
 }
 
 func rt(req *http.Request) (*http.Response, error) {
-	logger.Info("request received", "url", req.URL)
+	logger.Debug("request received", "url", req.URL)
 	//req.Header.Set("Host", backend)
-	defer logger.Info("request complete", "url", req.URL)
+	defer logger.Debug("request complete", "url", req.URL)
 
 	var InsecureTransport http.RoundTripper = &http.Transport{
 		Dial: (&net.Dialer{

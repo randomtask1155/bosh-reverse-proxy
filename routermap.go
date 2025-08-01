@@ -5,13 +5,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"math/rand/v2"
 )
 
 type RouteMapController struct {
-	Maps []RouteMaps
+	Maps  []RouteMaps
+	Mutex *sync.Mutex
 }
 
 type RouteMaps struct {
@@ -23,20 +25,18 @@ type RouteMaps struct {
 }
 
 func LoadRouteMapsFromFile(f string) (RouteMapController, error) {
-	rmc := RouteMapController{make([]RouteMaps, 0)}
+	rmc := RouteMapController{make([]RouteMaps, 0), &sync.Mutex{}}
 	b, err := os.ReadFile(f)
 	if err != nil {
 		return rmc, err
 	}
 	err = json.Unmarshal(b, &rmc.Maps)
-	//go rmc.RouterSyncer()
 	return rmc, err
 }
 
 func LoadRouteMapsFromString(f string) (RouteMapController, error) {
-	rmc := RouteMapController{make([]RouteMaps, 0)}
+	rmc := RouteMapController{make([]RouteMaps, 0), &sync.Mutex{}}
 	err := json.Unmarshal([]byte(f), &rmc)
-	//go rmc.RouterSyncer()
 	return rmc, err
 }
 
@@ -61,6 +61,8 @@ func (rmc *RouteMapController) RouteMapDirector(req *http.Request) {
 }
 
 func (rmc *RouteMapController) LoadBoshMappings(c, s, h string) error {
+	rmc.Mutex.Lock()
+	defer rmc.Mutex.Unlock()
 	b, err := NewBoshClient(c, s, h)
 	if err != nil {
 		return err
@@ -72,6 +74,7 @@ func (rmc *RouteMapController) LoadBoshMappings(c, s, h string) error {
 	}
 
 	for i, m := range rmc.Maps {
+		rmc.Maps[i].HostList = make([]string, 0) // clear hostlist for each iteration
 		for _, deployment := range bi.Deployments {
 			if strings.HasPrefix(deployment.Name, m.DeploymentPrefix) || deployment.Name == m.Deployment {
 				rmc.Maps[i].Deployment = deployment.Name
@@ -90,13 +93,34 @@ func (rmc *RouteMapController) LoadBoshMappings(c, s, h string) error {
 	return nil
 }
 
-func (rmc *RouteMapController) RouterSyncer() {
+/*
+RouterSyncer will periodically probe bosh instances to learn routes.
+if any route has zero host ips then sync interval is 1 minutes.
+After all routes are populated sync interval is 5 minutes.
+*/
+func (rmc *RouteMapController) RouterSyncer(client, secret, host string) {
+	sleepInterval := time.Minute
 	for {
+		emptyHostList := false
+		for _, r := range rmc.Maps {
+			if len(r.HostList) == 0 {
+				logger.Info("empty host list detected", "route", r.Route,
+					"deployment-prefix", r.DeploymentPrefix,
+					"job", r.Job)
+				emptyHostList = true
+				sleepInterval = time.Minute
+				break
+			}
+		}
+		if !emptyHostList {
+			sleepInterval = time.Minute * 5
+		}
+
 		logger.Debug("reloading bosh mappings")
-		err := rmc.LoadBoshMappings(*boshClient, *boshSecret, *boshHost)
+		err := rmc.LoadBoshMappings(client, secret, host)
 		if err != nil {
 			logger.Error("failed to reload bosh mappings", "error", err)
 		}
-		time.Sleep(1 * time.Minute)
+		time.Sleep(sleepInterval)
 	}
 }
