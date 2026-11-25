@@ -45,7 +45,7 @@ func (rmc *RouteMapController) RouteMapDirector(req *http.Request) {
 	backendHostHeader := ""
 	for _, r := range rmc.Maps {
 		if r.Route == req.Host {
-			if len(r.HostList) <= 1 {
+			if len(r.HostList) < 1 {
 				logger.Error("Route has no BOSH host mappings", "route", r.Route)
 				break
 			}
